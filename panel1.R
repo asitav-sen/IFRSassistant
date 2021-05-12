@@ -55,7 +55,9 @@ panel1<-tabPanel("Data",
          ),
          fluidRow(
            h3("ROC Curve"),
-           plotOutput("pdglmroc")
+           plotOutput("pdglmroc"),
+           h3("Table with"),
+           DTOutput("finalpdtbl")
          )
 )
 
@@ -140,6 +142,22 @@ modal1<-
             selected = NULL,
             multiple = F,
             selectize = TRUE
+          ),
+          varSelectInput(
+            "assetid",
+            "Select asset identifier (unique) column",
+            NULL,
+            selected = NULL,
+            multiple = F,
+            selectize = TRUE
+          ),
+          varSelectInput(
+            "factorlist",
+            "Select factor column",
+            NULL,
+            selected = NULL,
+            multiple = F,
+            selectize = TRUE
           )
           
         ),
@@ -160,10 +178,28 @@ modal1<-
             selected = NULL,
             multiple = F,
             selectize = TRUE
+          ),
+          varSelectInput(
+            "otherdate",
+            "Other date columns",
+            NULL,
+            selected = NULL,
+            multiple = F,
+            selectize = TRUE
           )
         )
       ),
       fluidRow(
+        column(
+          width = 11,
+          fluidRow(
+            # radioButtons(
+            #   "dateformat",
+            #   "Date format",
+            #   choices = c("dmy","ymd")
+            #   )
+          )
+        )
       )
     )
   )

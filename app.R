@@ -1,368 +1,457 @@
-options(shiny.maxRequestSize = 30 * 1024 ^ 2)
+# Estimate exposure at risk and create report (IFRS)
+# Application developed by Asitav Sen
+
 library(shiny)
-library(bslib)
-library(DT)
-library(data.table)
-library(scorecard)
+library(promises)
+library(future)
 library(dplyr)
-options(shiny.reactlog=TRUE)
+library(ggplot2)
+library(lubridate)
+library(survival)
+library(pec)
+library(DT)
+library(shinycssloaders)
+library(imfr)
+library(patchwork)
+
+plan(multisession)
 
 source("helpers.R")
-source("panel1.R")
+source("mod_basicstat.R")
 
-fudata <- read.csv("./data/fdata.csv")
-
-# Define UI for data upload app ----
-ui <- fluidPage(# Theme
-    #theme = bs_theme(version = 4, bootswatch = "litera"),
-    
-    titlePanel("Credit Risk"),
-    
-    # Sidebar layout with input and output definitions ----
-    sidebarLayout(# Sidebar panel for inputs ----
-                  sidebarPanel(
-                      width = 3,
-                      fluidRow(
-                          textOutput("info_ini"),
-                          uiOutput("column_selector")
-                      )
-                  ),
-                  
-                  
-                  mainPanel(
-                      tabsetPanel(
-                          panel1,
-                          tabPanel("1 year risk",
-                                   
-                                   "Building"),
-                          tabPanel("lifetime risk",
-                                   
-                                   " Need to build")
-                      )
-                      
-                      
-                  )))
+# Define UI for application that draws a histogram
+ui <- 
+    navbarPage("easyIFRS",
+               apptab,
+               tabPanel("About")
+    )
 
 
-
+# Define server logic required to draw a histogram
 server <- function(input, output) {
+
+    # Data
+    ndt<-read.csv("./data/transactions.csv")
     
-    # If upload button is clicked, show module
+    collateral<-read.csv("./data/collateral.csv")
     
-    observeEvent(input$upload,{
-        showModal(modalDialog(
-            modal1,
-            title = "Upload Data",
-            size = "l",
-            easyClose = FALSE,
-            footer = tagList(
-                modalButton("Cancel"),
-                actionButton("ok", "Ok")
-            )
-        )
-        )
-    })
+    countries<-read.csv("./data/countries.csv")
     
-    
-    # Store it in a reactive frame
-    
-    tempdata <- eventReactive(c(input$confirm, input$newdata),{
-        #If confirm button is clicked read data and store
-        if(input$confirm==T){
-            ndata <- read.csv(
-                input$newdata$datapath,
-                header = input$header,
-                sep = input$sep,
-                quote = input$quote
-            )
-        }
-    })
-    
-    observeEvent(c(input$confirm, tempdata()),{
-        updateVarSelectInput(
-            session = getDefaultReactiveDomain(),
-            "event_select",
-            label = "Select Event Column",
-            data = tempdata(),
-            selected = NULL
-        )
-        updateVarSelectInput(
-            session = getDefaultReactiveDomain(),
-            "amount_select",
-            label = "Select Loan Balance Column",
-            data = tempdata(),
-            selected = NULL
-        )
-        updateVarSelectInput(
-            session = getDefaultReactiveDomain(),
-            "date_origin",
-            label = "Select origin date column",
-            data = tempdata(),
-            selected = NULL
-        )
-        updateVarSelectInput(
-            session = getDefaultReactiveDomain(),
-            "date_maturity",
-            label = "Select maturity date column",
-            data = tempdata(),
-            selected = NULL
-        )
-    })
-    
-    fdata<- reactive({
-        if(input$upload==F){
-            ndata<-fudata
-            colnames(ndata)[colnames(ndata)=="status"]<-"default_event"
-            ndata[is.na(ndata)]<-0
-            return(ndata)
-        }
+    new.data<- reactive({
         
-    if(!is.null(input$event_select) | !is.null(input$amount_select) |
-               !is.null(input$date_origin) | !is.null(input$date_maturity)){
-                ndata<-tempdata()
-                ndata[is.na(ndata)]<-0
-            colnames(ndata)[colnames(ndata)==input$event_select]<-"default_event"
-            colnames(ndata)[colnames(ndata)==input$amount_select]<-"loan_balance"
-            colnames(ndata)[colnames(ndata)==input$date_origin]<-"origination_date"
-            colnames(ndata)[colnames(ndata)==input$date_maturity]<-"maturity_date"
-            return(ndata)
-            }
+        withProgress(message = "Trying to read",
+                     detail = "Hope the handwriting is legible!", value = 0,
+                     {
+                         setProgress(value = 1, message = "Patience test 1 of 2")
+                         ndt<-
+                             ndt%>%
+                             # Change format of columns mentioned as date 
+                             mutate(
+                                 origination_date=ymd(origination_date),
+                                 maturity_date=ymd(maturity_date),
+                                 report_date=ymd(report_date)
+                             )%>%
+                             # Add age of loan, loan tenure in months, which could be important parameters
+                             mutate(age_of_asset_months=round(as.numeric(report_date-origination_date)/30))%>%
+                             mutate(loan_tenure_months=round(as.numeric(maturity_date-origination_date)/30))%>%
+                             group_by(id)%>%
+                             # Arranging to avoid mistakes in lag
+                             arrange(report_date)%>%
+                             # Add lag of bureau score and total number of defaults. Lag added for delta creation
+                             mutate(cum_default=cumsum(default_flag),
+                                    bureau_score_lag=ifelse(is.na(lag(bureau_score_orig,1)),
+                                                            bureau_score_orig,lag(bureau_score_orig,1)))%>%
+                             # Adding delta of bureau score
+                             mutate(bureau_score_delta=bureau_score_lag-bureau_score_orig)%>%
+                             # Adding quarter info for matching later with macroeconomic data
+                             mutate(qtr = paste0(year(report_date),"-Q",quarter(report_date)))%>%
+                             # Removing dummy
+                             dplyr::select(-bureau_score_orig)
+                         setProgress(value = 2, message = "Patience test 1 of 2")
+                     })
+        ndt
     })
     
-    # Inform if using sample of custom data
-    output$info_ini <- renderText({
-        if (input$upload == F) {
-            "Using sample data"
-        } else {
-            "Using custom data"
-        }
-    })
-    
-    
-    observeEvent(input$ok,{
-        removeModal()
-    })
-    
-    
-
-    
-    # FOr sidebar
-
-    output$column_selector<- renderUI({
-        fluidRow(
-            column(width = 1),
-            column(
-                width = 11,
-                br(),
-                sliderInput(
-                    "iv_select",
-                    "Select min IV",
-                    min = 0.01,
-                    max = 0.99,
-                    value = 0.5,
-                    step = 0.01
-                )
+    # Show uploaded data
+    output$up_data<-renderDataTable({
+        datatable(
+            new.data(),
+            options = list(
+                pageLength = 5,
+                scrollX = TRUE,
+                filter = list(position = 'top', clear = FALSE),
+                buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
             )
         )
     })
     
+    # Show some stats
     
-    # Table to show in the data tab
-    output$fulldata <- renderDataTable({
-        fdata()
-    },
-    options = list(
-        pageLength = 5,
-        scrollX = TRUE,
-        filter = list(position = 'top', clear = FALSE)
-    ))
+    basicstatServer("nofloans", dt=new.data())
     
-    # Creating dataframe for analysis
-    
-    dt <- reactive({
-            bb<- fdata()%>%
-                dplyr::select(where(is.numeric))
-            bb<- bb%>% dplyr::select(-default_event,default_event)
-            bb<-var_filter(bb, y="default_event", iv_limit = 0.5)
-            return(bb)
-    })
-    
-    dt_list<-reactive({
-        req(dt())
-        zz = split_df(dt(), y="default_event", ratios = c(0.7, 0.3), seed = 30)
-        label_list = lapply(zz, function(x) x$default_event)
-        return(zz)
-    })
-    
-    
-    # woe binning ------
-    
-    bins<- reactive({
+    # Adding macroeconomic data. Currently GDP and prices data are extracted
+    dataset_with_eco<- reactive({
+        input$fetchimf
+        req(new.data(),input$fetchimf)
+        
+        # Defining database and other parameters for query of macroeconomic data
+        databaseID <- "IFS"
+        startdate = min(new.data()$report_date)
+        enddate = max(new.data()$report_date)
+        country=countries[countries$Country==input$country,]$Alpha.2.code
+        withProgress(message = "Trying Hard",
+                     detail = "Hang on", value = 0,
+                     {
+                         setProgress(value = 1, message = "working..")
+            imf.data<-imf_data(
+                databaseID,
+                c("NGDP_R_K_IX", 
+                  "PCPI_IX"),
+                country = "US",
+                start = startdate,
+                end = enddate,
+                freq = "Q",
+                return_raw = FALSE,
+                print_url = FALSE,
+                times = 3
+            )
+            
+            # New dataset by joining GDP and prices data
+            dataset_with_eco<-
+                new.data()%>%
+                left_join(imf.data, by=c("qtr"="year_quarter")) %>% 
+                rename(gdp=NGDP_R_K_IX, prices=PCPI_IX)%>%
+                select(-iso2c) %>% 
+                group_by(id)%>%
+                mutate(gdp_lag=lag(gdp,1), prices_lag=lag(prices,1))%>%
+                dplyr::select(-qtr)%>%
+                dplyr::select(-c(gdp,prices))
+            
+            # removing rows with no macroeconomic data
+            dataset_eco<-dataset_with_eco[!is.na(dataset_with_eco$gdp_lag) & !is.na(dataset_with_eco$prices_lag), ]
+                         setProgress(value = 2, message = "working..")
+                         })
 
-        req(dt())
-        req(input$createbin)
-        woebin(dt(), y="default_event")
+        return(dataset_eco) 
     })
     
-    output$bintable<- renderDataTable({
+    # Show full data
+    
+    output$fulldata<-renderDataTable({
         validate(
             need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        ax<-bins()[[1]]
-        for(i in 2:length(bins())){
-            ax<-rbind(ax,bins()[[i]])
-        }
-        ax
-    },
-    options = list(
-        pageLength = 5,
-        scrollX = TRUE,
-        filter = list(position = 'top', clear = FALSE)
-    )
-    )
-    
-
-    
-    # UI of plot button
-    output$woeplot<- renderUI({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        req(!is.null(bins()))
-        fluidRow(
-            column(
-                width = 11,
-                h3("Plot Bins"),
-                selectizeInput("woeplotselect",
-                               "Select Variable",
-                               choices= names(bins()),
-                               selected=NULL,
-                               multiple=F),
-                actionButton("plotbin","Plot"),
+                !is.null(dataset_with_eco()),
+                message = "Data Not ready yet"
             )
         )
-    })
-    
-    wplots<-reactive({
-        req(!is.null(bins()))
-        req(input$plotbin)
-        woebin_plot(bins())
-    })
-    
-    output$binplot<- renderPlot({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
+        withProgress(message = "Working",
+                     detail = "trying to add macroeconomy data", value = 0,
+                     {
+                         setProgress(value = 1, message = "Working")
+                         a<-dataset_with_eco()
+                         setProgress(value = 2, message = "Almost done")
+                     })
+        datatable(
+            a,
+            options = list(
+                pageLength = 5,
+                scrollX = TRUE,
+                filter = list(position = 'top', clear = FALSE),
+                buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+            )
         )
-        req(input$woeplotselect)
-        wplots()[[input$woeplotselect]]
     }
     )
     
-    dt_woe_list<- reactive({
-        lapply(dt_list(), function(x) woebin_ply(x, bins()))
-    }) 
+    # Action button to show when data is available
     
-    woe_corr<- reactive({
-        dt_woe_list()$train%>%
-            dplyr::select(ends_with("_woe"))%>%
-            cor(method = "pearson", use="complete.obs")
+    output$expcalcu<-renderUI({
+        req(!is.null(dataset_with_eco()), input$fetchimf)
+        fluidRow(
+            h3("Probability of asset going bad"),
+            actionButton("start_model_selection","Initiate Model Selection"),
+            withSpinner(plotOutput("probability_default"), type=7, color="black")
+        )
+    })
+    
         
-    }) 
     
-    output$corplot<- renderPlot({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        req(woe_corr())
-        corrplot(woe_corr(), method = "number", type = "lower", diag = F)
+    # Model Selection
+    selected_model<-reactive({
+        req(input$start_model_selection)
+        withProgress(message = "Model selection",
+                     detail = "working..", value = 0,
+                     {
+                         setProgress(value = 1, message = "Formatting Data")
+                         
+                         df<-dataset_with_eco()%>%
+                             dplyr::select(!where(is.Date))
+                         
+                         df$asset_type<-as.factor(df$asset_type)
+                         df$supplier<-as.factor(df$supplier)
+                         df$customer_type<-as.factor(df$customer_type)
+                         
+                         setProgress(value = 2, message = "Creating initial formula")
+                         
+                         variables<-colnames(df)[!colnames(df) %in% c("id","age_of_asset_months","loan_status", "cum_default")]
+                         form<-as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(variables,collapse = "+")))
+                         
+                         setProgress(value = 3, message = "Heavy operation. May take few minutes.")
+                         
+                         forms<-vector(mode = "list", length = 5)
+                         models<-vector(mode = "list", length = 5)
+                         newform<-NULL
+                         scores<-rep(NA,5)
+                             for(i in 1:5){
+                                 # Sampling
+                                 train=sample(c(TRUE,FALSE), nrow(df),rep=TRUE, prob=c(0.9,0.1))
+                                 test =(! train )
+                                 # Fit survival (Coxph) model
+                                 surv.res<-coxph(form, data = df[train,], id=id)
+                                 # Store result
+                                 res<-as.data.frame(summary(surv.res)$coefficients)
+                                 # Select variables based on p value
+                                 selvars<-
+                                     res%>%
+                                     filter(!is.na(`Pr(>|z|)`)&`Pr(>|z|)`<0.05)%>%
+                                     rownames()
+                                 # Renaming factor variables to original variable name
+                                 for(j in 1:length(variables)) {
+                                     selvars[grep(pattern = variables[j],selvars)]<-variables[j]
+                                 }
+                                 # Select the new set of variable
+                                 selvars<-unique(selvars)
+                                 # Create new formula from new set of variables
+                                 newform<- as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(selvars,collapse = "+")))
+                                 # Result of new fit
+                                 new.surv.res<-coxph(newform, data = df[train,], id=id, x=T)
+                                 # Store Evaluation results, forms, models
+                                 perror<-pec(object = new.surv.res,formula = newform, splitMethod = "cv5", data=df)
+                                 
+                                 forms[[i]]<-newform
+                                 models[[i]]<-new.surv.res
+                                 scores[i]<-ibs(perror)["coxph", "crossvalErr"]
+                             }
+                             # Select the model with min error
+                             final.model<-models[[which(scores==min(scores, na.rm = T))]]
+                         setProgress(value = 4, message = "Done")
+                     })
+   
+        final.model
     })
     
-    selected_vars<- reactive({
-        ad<-woe_corr()
-        ad[upper.tri(ad)] <- 0
-        diag(ad) <- 0
-        ad <- ad[,!apply(ad,2,function(x) any(abs(x) > 0.7))]
-        selec_var<-rownames(ad)
-        selec_var
-    })
-    
-    output$selvars<- renderText({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        paste0("Selected Variabes are ", paste(selected_vars(), collapse = ", "))
-    })
-    
-    # Model selection
-    
-    glm_pd<-reactive({
-        req(selected_vars())
-        form<-as.formula(paste0("default_event~", paste(selected_vars(), collapse = "+")))
-        m1 = glm(form, family = binomial(), data = dt_woe_list()$train)
-        m1
-    })
-    
-    glm_step_pd<-reactive({
-        req(glm_pd())
-        m_step = step(glm_pd(), direction="both", trace = FALSE)
-        m2 = eval(m_step$call)
-        m2
-    })    
-    
-    output$pdmodels<-renderPrint({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        req(glm_step_pd())
-        #summary(glm_pd())
-        summary(glm_step_pd())
+    # Preparing tables with predictions
+    predicted_table<-reactive({
         
-    })
-    
-    output$pdglmroc<- renderPlot({
-        validate(
-            need(
-                unique(fdata()$default_event) %in% c(0,1),
-                message = "Please check the column selected"
-            ),
-            need(length(unique(fdata()$default_event))==2,
-                 message = "Please check the column selected")
-        )
-        perf.auc(model = glm_step_pd(), dt_woe_list()$train, dt_woe_list()$test)
+        input$start_model_selection
+        req(!is.null(selected_model()))
+        
+        final.model<- selected_model()
+        withProgress(message = "Preparing final table",
+                     detail = "Exposure at Risk", value = 0,
+                     {
+                         setProgress(value = 1, message = "Formatting")
+                         df<-dataset_with_eco()%>%
+                             dplyr::select(!where(is.Date))
+                         df$asset_type<-as.factor(df$asset_type)
+                         df$supplier<-as.factor(df$supplier)
+                         df$customer_type<-as.factor(df$customer_type)
+                         
+                         setProgress(value = 2, message = "Running calculations")
+                         z<-
+                             df%>%
+                             group_by(id)%>%
+                             slice_max(age_of_asset_months,n=1)%>%
+                             ungroup()%>%
+                             mutate(a_in_mon=age_of_asset_months)%>%
+                             mutate(risk_current=1-exp(-predict(final.model, ., type="expected", collapse = id)))%>%
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+12,0))%>%
+                             mutate(risk_1yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+24,0))%>%
+                             mutate(risk_2yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+36,0))%>%
+                             mutate(risk_3yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+48,0))%>%
+                             mutate(risk_4yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+60,0))%>%
+                             mutate(risk_5yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>%
+                             mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, loan_tenure_months,0))%>%
+                             mutate(risk_till_end=1-exp(-predict(final.model, ., type="expected", collapse = id)))%>%
+                             group_by(id)%>%
+                             tidyr::pivot_longer(cols = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                                                          "risk_5yr", "risk_till_end"))%>%
+                             mutate(emi=unique(balance)/(unique(loan_tenure_months)-unique(a_in_mon)))%>%
+                             mutate(r_n=row_number())%>%
+                             mutate(t.emi=emi+emi*12*(r_n-1))%>%
+                             mutate(balance=ifelse(t.emi==max(emi),balance,balance-t.emi))%>%
+                             mutate(balance=ifelse(balance<=0,0,balance))%>%
+                             filter(t.emi>0)
+                         setProgress(value = 3, message = "Done")
+                     })
+        z
+
     })
 
     
+    # Plot Probability of default
+    output$probability_default<- renderPlot({
+        input$start_model_selection
+        req(predicted_table())
+        predicted_table()%>%
+            group_by(name)%>%
+            #summarise(pd.me=median(value), pd.min=quantile(value,0.05), pd.max=quantile(value, 0.95))%>%
+            slice_head(n=6)%>%
+            mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                                                "risk_5yr")))%>%
+            filter(!is.na(name))%>%
+            ggplot(aes(x=name, y=value, fill=name))+
+            geom_violin()+
+            geom_boxplot(width=0.1, color="black", alpha=0.2)+
+            labs(x="",
+                 y="Probability",
+                 title = "Probability of default")+
+            theme_bw()+
+            theme(legend.title = element_blank(), legend.position = "bottom")
+    })
     
+    # Show scenario creation options when exposures and risks are calculated
+    
+    output$scenario_opts<-renderUI({
+        req(!is.null(predicted_table()), input$start_model_selection)
+        fluidRow(
+            br(),
+            h3("Possible Scenarios"),
+            br(),
+            column(
+                width = 3,
+                sliderInput("discount_rate","Select Discount rate / WACC", min=0.00, max=20.00, value = 4.25,
+                            step=0.25),
+                br(),
+                h3("Select expected change in collateral value"),
+                p("-ve means reduction in value"),
+                br(),
+                sliderInput("mode_dep","Most Probable", min=-0.5, max=0.5, value = -0.3,
+                            step=0.1),
+                sliderInput("min_dep","Minimum", min=-0.5, max=0.5, value = -1,
+                            step=0.1),
+                sliderInput("max_dep","Most Probable", min=-0.5, max=0.5, value = 0,
+                            step=0.1),
+                actionButton("update", "Update")
+            ),
+            column(
+                width = 9,
+                plotOutput("exposure_on_default")
+            )
+        )
+    })
+    
+    # Exposure on Default
+    
+    output$exposure_on_default<- renderPlot({
+        input$update
+        req(!is.null(predicted_table()))
+        
+            predicted_table()%>%
+            filter(name!="risk_till_end")%>%
+            mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+            mutate(exposure_on_default=pv.balance*value)%>%
+            group_by(name)%>%
+            summarise(pv.balance=sum(pv.balance), exposure_on_default=sum(exposure_on_default))%>%
+            mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                                                "risk_5yr")))%>%
+            pivot_longer(cols=c("pv.balance","exposure_on_default"), names_to="type", values_to="amount")%>%
+            ggplot(aes(x=name, y=amount/1000000, fill=type, label=paste0(round(amount/1000000)," M")))+
+            geom_col(position = "dodge")+
+            geom_text(aes(y=(amount/1000000)+5), position = position_dodge(width = 1))+
+            labs(x="",
+                 y="Amount",
+                 title = "Exposure on default",
+                 subtitle = "Amounts discounted")+
+            theme_bw()+
+            theme(legend.title = element_blank(), legend.position = "bottom")
+    })
+    
+    output$credit_loss<-renderUI({
+        req(!is.null(predicted_table()), input$update)
+        fluidRow(
+            h3("Simulated Credit Loss with probability"),
+            br(),
+            selectInput("riskperiod","Select time", choices = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                                                                "risk_5yr"),
+                        selected = "risk_1yr"),
+            br(),
+            plotOutput("simres",
+                       brush = brushOpts(id = "sim_res_sel"))
+            
+        )
+    })
+    
+    
+    
+    simdata<-reactive({
+        
+        input$update
+        
+        zz<-
+            predicted_table()%>%
+            ungroup()%>%
+            filter(name!="risk_till_end")%>%
+            group_by(id)%>%
+            mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+            left_join(collateral, by="id")%>%
+            ungroup()%>%
+            select(name,pv.balance, value, collateral)
+            
+        sim.t<-data.frame(matrix(ncol=1000,nrow=nrow(zz1)))
+        colnames(sim.t)<-paste0("sim",seq(1:1000))
+        sim.col.prob<-(1-rtriangle(1000, a=c.value.min, b=c.value.max,c=c.value.mp))
+        
+        for(i in 1:1000){
+                sim.t[,i]<-round(zz$value*(zz$pv.balance-zz$collateral*sim.col.prob[i]),2)
+        }
+        
+        sim.t[sim.t<0]<-0
+        sim.t<-cbind(zz,sim.t)
+        sim.t
+    })
+    
+    simresdata<-reactive({
+        dt<-simdata()%>%
+            filter(name==input$riskperiod)
+        hist.pro <- density(colSums(dt))
+        hist.pro
+    })
+    
+    output$simres<-renderPlot({
+        
+        req(!is.null(simresdata()))
+        hist.pro<-simresdata()
+        pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+        
+        ggplot(pro_dens,
+               aes(
+                   x = hist.pro.x,
+                   y = hist.pro.y,
+                   ymin = 0,
+                   ymax = max(hist.pro.y)
+               )) + geom_area(aes(y = hist.pro.y)) +
+            labs(x="Amount",
+                 y="Chance",
+                 title = "Simulated expected credit loss",
+                 subtitle = "Amounts discounted")+
+            theme_bw()
+    })
+    
+    output$cumprob<-renderText({
+        res<-brushedPoints(simresdata(), input$sim_res_sel, "x","y")
+        if (nrow(res) == 0){
+            return()
+        }
+        paste0("Probability of the loss te be between",min(res$x)," and ", max(res$x), "is" ,sum(res$y))
+    })
+
+
 }
-# Run the app ----
-shinyApp(ui, server)
+
+# Run the application 
+shinyApp(ui = ui, server = server)

@@ -1,0 +1,666 @@
+---
+title: "Analysis"
+author: "asitav"
+date: "22/04/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lubridate)
+library(survival)
+library(triangle)
+library(imfr)
+```
+
+
+
+```{r}
+lnt<-read.csv("./data/train.csv")
+lnt%>%
+  group_by(UniqueID)%>%
+  summarise(count=n())%>%
+  arrange(desc(count))
+```
+
+```{r}
+dic<-read.csv("./data/data_dictionary.csv")
+dic
+
+oneypd<-read_xlsx("./data/chap2oneypd.xlsx")
+
+dtree<- read_xlsx("./data/chap2datatree.xlsx")
+
+
+```
+
+```{r}
+fdata<-
+oneypd%>%
+  mutate(across(contains("date"), ymd))%>%
+  mutate(max_arrears_12m=round(max_arrears_12m,4))%>%
+  mutate(arrears_months=round(arrears_months,4))%>%
+  mutate(default_event = if_else(oneypd$arrears_event == 1 | oneypd$term_expiry_event == 1 | 
+                                   oneypd$bankrupt_event == 1, 1,0))
+#  mutate(default_flag= ifelse(default_event == 1, 0,1))  # flag is opposite of event
+
+
+fdata<-
+  fdata%>%
+  dplyr::select(id, vintage_year, monthly_installment, loan_balance, bureau_score,
+         region, ltv, arrears_months, origination_date, maturity_date,
+         arrears_status, loan_term, live_status, repaid_status, month, arrears_event, 
+         term_expiry_event, worst_arrears_status, max_arrears_12m, max_arrears_bal_6m, avg_bureau_score_6m,
+         cc_util, annual_income, emp_length, months_since_recent_cc_delinq, default_event)%>%
+  rename(l_year=vintage_year, overdue_months=arrears_months, overdue_status=arrears_status,overdue_event=arrears_event,
+         max_overdue_event=worst_arrears_status, max_overdues_12m=max_arrears_12m, credit_utilization=cc_util,
+         months_since_cc_deliq=months_since_recent_cc_delinq)%>%
+  mutate(avg_bureau_score_6m=as.numeric(avg_bureau_score_6m), bureau_score=as.numeric(bureau_score))
+
+fdata<-
+  fdata%>%
+  dplyr::select(!(l_year))
+
+fdata<-as.data.frame(fdata)
+# fdata<-
+#   fdata%>%
+#   rename(status=default_event)
+fdata<-
+fdata%>%
+  dplyr::select(where(is.numeric))
+# fdata<-
+# fdata%>%
+#   dplyr::select(-1)
+# write.csv(fdata,"fdata.csv", row.names=FALSE)
+```
+
+
+```{r}
+fdata<-read.csv("fdata.csv")
+
+# Need to ask user about which one is the event column and change the name accordingly
+fdata<-fdata %>% dplyr::select(-default_event,default_event)
+
+fdata[is.na(fdata)]<-0
+# diving into test and training
+set.seed(1111)
+library(scorecard)
+c.train <- createDataPartition(fdata$default_event, p = .7, list = FALSE)
+fdata.train <- fdata[c.train, ]
+fdata.test <- fdata[-c.train, ]
+row.names(fdata.train) <- NULL
+row.names(fdata.test) <- NULL
+
+# Preserve original data
+
+fdata.train.bk <- fdata.train
+fdata.test.bk <- fdata.test
+
+
+fdata<-var_filter(fdata, y="default_event", iv_limit = 0.5, var_kp = "id")
+#fdata<-fdata[,apply(fdata,2,function(x) !all(x==0))]
+dt_list = split_df(fdata, y="default_event", ratios = c(0.7, 0.3), seed = 30)
+label_list = lapply(dt_list, function(x) x$default_event)
+bins = woebin(fdata, y="default_event")
+ax<-bins[[1]]
+for(i in 2:length(bins)){
+            ax<-rbind(ax,bins[[i]])
+        }
+ax
+
+wplots<-woebin_plot(bins)
+
+wplots[["bureau_score"]]
+
+#breaks_adj = woebin_adj(fdata, "default_event", bins) 
+
+dt_woe_list = lapply(dt_list, function(x) woebin_ply(x, bins))
+
+woe_corr<-dt_woe_list$train%>%
+  dplyr::select(ends_with("_woe"))%>%
+  cor(method = "pearson", use="complete.obs")
+
+corrplot(woe_corr, method = "number", type = "lower", diag = F)
+woe_corr[upper.tri(woe_corr)] <- 0
+diag(woe_corr) <- 0
+woe_corr <- woe_corr[,!apply(woe_corr,2,function(x) any(abs(x) > 0.7))]
+selected_vars<-rownames(woe_corr)
+
+form<-as.formula(paste0("default_event~", paste(selected_vars, collapse = "+")))
+
+
+
+```
+
+
+```{r}
+
+m1 = glm(form, family = binomial(), data = dt_woe_list$train)
+vif(m1, merge_coef = TRUE)
+m_step = step(m1, direction="both", trace = FALSE)
+m2 = eval(m_step$call)
+vif(m2, merge_coef = TRUE)
+summary(m1)
+
+pred_list = lapply(dt_woe_list, function(x) predict(m2, x, type='response'))
+
+perf.auc(model = m_step, dt_woe_list$train, dt_woe_list$test)
+
+temp<-rbind(dt_woe_list$train,dt_woe_list$test)
+
+card_prob_adj = scorecard2(bins, dt=dt_list$train, y='default_event',
+               x=sub('_woe$','',names(coef(m2))[-1]), badprob_pop=0.03, return_prob=TRUE)
+
+perf = perf_eva(pred = pred_list, label = label_list)
+
+card = scorecard(bins, m2)
+m2$fitted.values
+
+pred_list$test
+
+perf = perf_eva(pred = pred_list, label = label_list, binomial_metric = c("mse", "rmse",
+  "logloss", "r2", "ks", "auc", "gini"),
+  confusion_matrix = TRUE, show_plot = c('ks', 'lift', 'gain', 'roc', 'lz', 'pr', 'f1', 'density'))
+
+score_list = lapply(dt_list, function(x) scorecard_ply(x, card))
+
+perf_psi(score = score_list, label = label_list)
+
+score_list$train
+
+card_prob_adj = scorecard2(bins, dt=dt_list$train, y='default_event',
+               x=sub('_woe$','',names(coef(m2))[-1]), return_prob=TRUE)
+
+score_list = lapply(dt_list, function(x) scorecard_ply(x, card_prob_adj))
+score_list$train
+
+cv<-perf_cv(rbind(dt_woe_list$train,dt_woe_list$test), y="default_event", no_folds = 10)
+cv$ks
+#form<- as.formula(paste0("default_event~",paste(colnames(fdata)[colnames(fdata)!="default_event"], collapse = "+")))
+
+perf.auc(model = m2, dt_woe_list$train, dt_woe_list$test)
+
+#col.n<-colnames(fdata)[colnames(fdata)!="default_event"]
+iv_analysis<- smbinning.sumiv(df=fdata.train,y="default_event")
+smbinning.sumiv.plot(iv_analysis,cex=1)
+selected_cols<-iv_analysis[iv_analysis$IV>0.5 & !is.na(iv_analysis$IV),]$Char
+selected_cols<-append(selected_cols,"default_event")
+
+fdata.train<-fdata.train[,selected_cols]
+fdata.test<-fdata.test[,selected_cols]
+
+a<-smbinning(fdata.train, y="default_event", x=selected_cols[1])
+
+for(i in 1:(ncol(fdata)-1)){
+  form=as.formula(paste0("default_event~",colnames(fdata.train)[i]))
+  lg.bin<-bin.rpart(formula = form, data = fdata.train, rcontrol = rpart.control(minbucket = .01 * nrow(fdata.train)))
+  fdata.train[,i]<- ifelse(is.atomic(lg.bin),"No Bin", lg.bin$bins)
+}
+
+col.x <- colnames(fdata.train)[colnames(fdata)!="default_event"]
+stat.train <- level.stat(fdata.train, x = col.x, y = 'default_event', flag.0 = 0, flag.1 = 1)
+
+stat.train<-
+  stat.train%>%
+  filter(is.finite(IV))%>%
+  filter(IV>0.3)
+
+ggstat(data = stat.train, var = "Variable.IV", x = "Group", y = "Rate.1", 
+    y.label = "Perc.1", y.label.col = "red", y.title = NULL, 
+    bar.col = "cornflowerblue", width = 0.2, ncol = NULL, theme = "classic", 
+    background = "white")
+no_of_factors<-function(x) {
+  ifelse(is.factor(x),length(unique(x)),0)
+  }
+
+x<-apply(fdata,2,no_of_factors)
+names(x[x>25])
+
+```
+
+
+
+
+
+
+```{r}
+library(glmnet)
+dt<-rbind(dt_woe_list$train,dt_woe_list$train)
+dt
+selected_vars<-colnames(dt)[colnames(dt)!="default_event"]
+form<-as.formula(paste0("default_event~", paste(dt_woe_list$train, collapse = "+")))
+x=model.matrix(form,dt_woe_list$train)
+y=dt_woe_list$train$default_event
+lasso.mod=glmnet(x,y,alpha=1, family = "binomial")
+plot(lasso.mod)
+set.seed (1)
+cv.out=cv.glmnet(x,y,alpha=1, family="binomial")
+plot(cv.out)
+bestlam=cv.out$lambda.min
+lasso.pred=predict(lasso.mod,s=bestlam ,newx=as.matrix(dt_woe_list$test))
+mean((lasso.pred-dt_woe_list$test$default_event)^2)
+out=glmnet(x,y,alpha=1)
+lasso.coef=predict(out,type="coefficients",s=bestlam)
+lasso.coef
+
+dt_woe_list$train
+```
+
+
+
+```{r}
+ndt<-read.csv("transactions.csv")
+
+# ndt<-
+# ndt%>%
+#   dplyr::select(-c(6,7,11,12))
+# ndt<-
+# ndt%>%
+#   group_by(id)%>%
+#   mutate(asset_type=sample(c("Tractor","Backhoe Loader", "Excavator", "Tipping Trailer"),
+#                            1,replace = T, prob = c(0.4,0.3,0.1,0.2)))%>%
+#   mutate(supplier=sample(c("supplier1","supplier2","supplier3","supplier4","supplier5",
+#                            "supplier6","supplier7"),1,replace = T))%>%
+#   mutate(customer_type=sample(c("Individual","Business"),1,replace = T, prob = c(0.7,0.3)))%>%
+#   ungroup()%>%
+#   mutate(loan_status=ifelse(loan_status=="good",0,1))
+# 
+# ndt%>%
+#   write.csv("transactions.csv", row.names = F)
+  
+```
+
+
+```{r}
+# Identify id
+# identify reporting date
+# identify origination date
+# identify maturity date
+ndt<-
+ndt%>%
+  mutate(
+    origination_date=ymd(origination_date),
+    maturity_date=ymd(maturity_date),
+    report_date=ymd(report_date)
+  )
+
+dataset<-
+ndt%>%
+  mutate(age_of_asset_months=round(as.numeric(report_date-origination_date)/30))%>%
+  mutate(loan_tenure_months=round(as.numeric(maturity_date-origination_date)/30))%>%
+  group_by(id)%>%
+  arrange(report_date)%>%
+  mutate(cum_default=cumsum(default_flag),
+         bureau_score_lag=ifelse(is.na(lag(bureau_score_orig,1)),
+                                 bureau_score_orig,lag(bureau_score_orig,1)))%>%
+  mutate(bureau_score_delta=bureau_score_lag-bureau_score_orig)%>%
+  mutate(qtr = paste0(year(report_date),"-Q",quarter(report_date)))%>%
+  dplyr::select(-bureau_score_orig)
+# %>%
+#   dplyr::select(-default_flag)
+
+
+databaseID <- "IFS"
+startdate = min(ndt$report_date)
+enddate = max(ndt$report_date)
+checkquery = FALSE
+
+queryfilter <- list(CL_FREA = "Q", CL_AREA_IFS = "US", CL_INDICATOR_IFS = c("NGDP_R_K_IX", 
+    "PCPI_IX"))
+
+imf.query <- CompactDataMethod(databaseID, queryfilter, startdate, enddate, 
+    checkquery)
+imf.data<-imf_data(
+  databaseID,
+  c("NGDP_R_K_IX", 
+    "PCPI_IX"),
+  country = "US",
+  start = startdate,
+  end = enddate,
+  freq = "Q",
+  return_raw = FALSE,
+  print_url = FALSE,
+  times = 3
+)
+
+
+dataset_with_eco<-
+dataset%>%
+  left_join(imf.data, by=c("qtr"="year_quarter")) %>% 
+  rename(gdp=NGDP_R_K_IX, prices=PCPI_IX)%>%
+  select(-iso2c) %>% 
+  group_by(id)%>%
+  mutate(gdp_lag=lag(gdp,1), prices_lag=lag(prices,1))%>%
+  dplyr::select(-qtr)%>%
+  dplyr::select(-c(gdp,prices))
+  
+dataset_with_eco<-dataset_with_eco[!is.na(dataset_with_eco$gdp_lag) & !is.na(dataset_with_eco$prices_lag), ]
+
+df<-dataset_with_eco%>%
+  dplyr::select(!where(is.Date))
+lenun<- function(x){
+  length(unique(x))
+}
+df<-df%>%
+  select(-names(which(apply(df, 2, lenun)==1)))
+
+df$asset_type<-as.factor(df$asset_type)
+df$supplier<-as.factor(df$supplier)
+df$customer_type<-as.factor(df$customer_type)
+
+variables<-colnames(df)[!colnames(df) %in% c("id","age_of_asset_months","loan_status", "cum_default")]
+form<-as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(variables,collapse = "+")))
+surv.res<-coxph(form, data = df, id=id)
+survminer::ggsurvplot(survfit(surv.res), data = df)
+summary(surv.res)
+ggsurvplot(survfit(Surv(age_of_asset_months, loan_status)~asset_type, df))
+str(summary(surv.res))
+res<-as.data.frame(summary(surv.res)$coefficients)
+
+selvars<-
+res%>%
+  filter(!is.na(`Pr(>|z|)`)&`Pr(>|z|)`<0.05)%>%
+  rownames()
+
+for(i in 1:length(variables)) {
+selvars[grep(pattern = variables[i],selvars)]<-variables[i]
+}
+newform<- as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(selvars,collapse = "+")))
+new.surv.res<-coxph(newform, data = df, id=id)
+exp(-predict(new.surv.res, newdata=df, type="expected"))
+summary(new.surv.res)$conf.int
+a<-predict(new.surv.res, newdata=df, type="expected", interval="confidence", level=0.95, se.fit=TRUE)
+a$se.fit
+a$fit
+```
+
+
+
+
+
+
+
+```{r}
+qkey<-"yt_7JwD6ZKet_g1F8Nax"
+library(Quandl)
+Quandl.api_key(qkey)
+Quandl("WWDI/CHN_NY_GDP_PCAP_KN", type = 'xts')
+lnt
+colnames(lnt)
+
+library(IMFData)
+library(pec)
+DataStructureMethod("PGI")
+
+variables<-colnames(df)[!colnames(df) %in% c("id","age_of_asset_months","loan_status", "cum_default")]
+form<-as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(variables,collapse = "+")))
+forms<-vector(mode = "list", length = 10)
+models<-vector(mode = "list", length = 10)
+scores<-rep(NA,10)
+for(i in 1:10){
+train=sample(c(TRUE,FALSE), nrow(df),rep=TRUE, prob=c(0.9,0.1))
+test =(! train )
+surv.res<-coxph(form, data = df[train,], id=id)
+res<-as.data.frame(summary(surv.res)$coefficients)
+selvars<-
+res%>%
+  filter(!is.na(`Pr(>|z|)`)&`Pr(>|z|)`<0.05)%>%
+  rownames()
+for(j in 1:length(variables)) {
+selvars[grep(pattern = variables[j],selvars)]<-variables[j]
+}
+selvars<-unique(selvars)
+newform<- as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(selvars,collapse = "+")))
+new.surv.res<-coxph(newform, data = df[train,], id=id, x=T)
+perror<-pec(object = new.surv.res,formula = newform, splitMethod = "cv10", data=df)
+forms[[i]]<-newform
+models[[i]]<-new.surv.res
+scores[i]<-1-ibs(perror)["coxph", "crossvalErr"]/ibs(perror)["Reference", "crossvalErr"]
+}
+summary(perror)
+
+variables<-colnames(df)[!colnames(df) %in% c("id","age_of_asset_months","loan_status", "cum_default")]
+a<-length(variables)
+f<-vector(mode = "list", length = a)
+scores = vector(length = a)
+for(i in 1:a){
+  v<-variables[i:a]
+  #n<-paste0("form",i)
+  f[[i]]<-coxph(as.formula(paste0("Surv(age_of_asset_months, loan_status) ~",paste(v,collapse = "+"))),
+                data = df, id=id,x=T, y=T)
+  perror<-pec(object = f[[i]],formula = form, splitMethod = "cvK5", data=df)
+  scores[i]<-1-ibs(perror)["coxph",]/ibs(perror)["Reference",]
+}
+
+final.model<-f[[which(scores==max(scores, na.rm = T))]]
+
+final.model<-models[[which(scores==max(scores, na.rm = T))]]
+final.form<-forms[[which(scores==max(scores, na.rm = T))]]
+summary(final.model, newdata=df, se.fit = TRUE, conf.int = 0.95, times=50)
+exp(-predict(final.model, df, type = "expected"))
+df1<-
+  df%>%
+  mutate(age_of_asset_months=loan_tenure_months)
+a<-predict(final.model, df, type="expected", interval = "confidence")
+predict(final.model, df1, type="expected", interval = "confidence", collapse = id)
+exp(-a)
+exp(confint(final.model))
+sum(exp(-a)>0.5)
+sum(df$loan_status)
+survminer::ggsurvplot(final.model)
+
+cali<-data.frame(
+  value=a,
+loan_status=as.factor(df$loan_status)
+)
+
+tra<-glm(loan_status~value,data = cali,family = binomial)
+
+sum(predict(tra,cali[1],type = "response")>0.5)
+
+
+z<-
+df%>%
+  group_by(id)%>%
+  slice_max(age_of_asset_months,n=1)%>%
+  ungroup()%>%
+  mutate(a_in_mon=age_of_asset_months)%>%
+  mutate(risk_current=1-exp(-predict(final.model, ., type="expected", collapse = id)))%>%
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+12,0))%>%
+  mutate(risk_1yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+24,0))%>%
+  mutate(risk_2yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+36,0))%>%
+  mutate(risk_3yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+48,0))%>%
+  mutate(risk_4yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>% 
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, age_of_asset_months+60,0))%>%
+  mutate(risk_5yr=1-exp(-predict(final.model, ., type="expected", collapse = id))) %>%
+  mutate(age_of_asset_months=ifelse(age_of_asset_months<loan_tenure_months, loan_tenure_months,0))%>%
+  mutate(risk_till_end=1-exp(-predict(final.model, ., type="expected", collapse = id)))%>%
+  group_by(id)%>%
+  tidyr::pivot_longer(cols = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr", "risk_till_end"))%>%
+  mutate(emi=unique(balance)/(unique(loan_tenure_months)-unique(a_in_mon)))%>%
+  mutate(r_n=row_number())%>%
+  mutate(t.emi=emi+emi*12*(r_n-1))%>%
+  mutate(balance=ifelse(t.emi==max(emi),balance,balance-t.emi))%>%
+  mutate(balance=ifelse(balance<=0,0,balance))%>%
+  filter(t.emi>0)
+
+
+z%>%
+  group_by(name)%>%
+  #summarise(pd.me=median(value), pd.min=quantile(value,0.05), pd.max=quantile(value, 0.95))%>%
+  slice_head(n=6)%>%
+  mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr")))%>%
+  filter(!is.na(name))%>%
+  ggplot(aes(x=name, y=value, fill=name))+
+  geom_violin()+
+  geom_boxplot(width=0.1, color="black", alpha=0.2)+
+  labs(x="",
+       y="Probability",
+       title = "Probability of default")+
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position = "bottom")
+
+
+```
+
+
+```{r}
+
+
+current_default<-0.009
+likely_default<-0.02
+
+rbinom(10000,1,sum(z$loan_status)/nrow(z))
+
+hist(z$balance)
+
+ED=PD*EAD*LGD
+
+# int_rate<-imf_data(
+#   "IFS",
+#   "FILR_PA",
+#   country = "US",
+#   start = startdate,
+#   end = enddate,
+#   freq = "Q",
+#   return_raw = FALSE,
+#   print_url = F,
+#   times = 3
+# )
+
+
+
+sd(int_rate$FILR_PA)
+median(int_rate$FILR_PA)
+idist<-rnorm(1000, mean = median(int_rate$FILR_PA),sd= sd(int_rate$FILR_PA))
+hist(idist)
+getmode(round(int_rate$FILR_PA,2))
+var(int_rate$FILR_PA)
+imf_codes("CL_INDICATOR_IFS")
+
+z
+df
+collateral<-
+ndt%>%
+  group_by(id)%>%
+  slice_min(report_date,n=1)%>%
+  mutate(collateral=balance*abs(rnorm(1, 0.5,0.25)))%>%
+  select(id, collateral)
+
+# Exposure at Default
+discount_rate_pa<-0.02
+z%>%
+  filter(name!="risk_till_end")%>%
+  mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+  mutate(exposure_on_default=pv.balance*value)%>%
+  group_by(name)%>%
+  summarise(pv.balance=sum(pv.balance), exposure_on_default=sum(exposure_on_default))%>%
+  mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr")))%>%
+  pivot_longer(cols=c("pv.balance","exposure_on_default"), names_to="type", values_to="amount")%>%
+  ggplot(aes(x=name, y=amount/1000000, fill=type, label=paste0(round(amount/1000000)," M")))+
+  geom_col(position = "dodge")+
+  geom_text(aes(y=(amount/1000000)+5), position = position_dodge(width = 1))+
+  labs(x="",
+       y="Amount",
+       title = "Exposure on default",
+       subtitle = "Amounts discounted")+
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position = "bottom")
+```
+
+
+
+```{r}
+# Loss given default
+
+c.value.mp<- -0.3
+c.value.min<- -1
+c.value.max<- 0
+
+z%>%
+  filter(name!="risk_till_end")%>%
+  group_by(id)%>%
+  mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+  mutate(exp_loss=value*pv.balance)%>%
+  left_join(collateral, by="id")%>%
+  mutate(dep=rtriangle(1, a=c.value.min, b=c.value.max,c=c.value.mp))%>%
+  mutate(colla.val=collateral*(1+dep*(r_n-1)))%>%
+  mutate(colla.val=ifelse(colla.val<0,0,colla.val))%>%
+  mutate(lgd=(pv.balance-colla.val)/pv.balance)%>%
+  mutate(lgd=ifelse(pv.balance==0 | exp_loss==0, 0, lgd))%>%
+  mutate(ecl=value*pv.balance*lgd)%>%
+  group_by(name)%>%
+  summarise(ecl=sum(ecl))%>%
+  mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr")))%>%
+  ggplot(aes(x=name, y=ecl/1000000, label=paste0(round(ecl/1000000,2)," M")))+
+  geom_col()+
+  geom_text(aes(y=(ecl/1000000)+(ecl/1000000)*0.2), position = position_dodge(width = 1))+
+  labs(x="",
+       y="Amount",
+       title = "Expected Credit Loss",
+       subtitle = "Amount in present value")+
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position = "bottom")
+```
+
+
+```{r}
+#scenario
+
+zz<-
+  z%>%
+  ungroup()%>%
+  filter(name!="risk_till_end")%>%
+  group_by(id)%>%
+  mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+  left_join(collateral, by="id")
+  mutate(dep=rtriangle(1, a=c.value.min, b=c.value.max,c=c.value.mp))%>%
+  mutate(colla.val=collateral*(1+dep*(r_n-1)))%>%
+  mutate(colla.val=ifelse(colla.val<0,0,colla.val))
+  mutate(lgd=(pv.balance-colla.val)/pv.balance)%>%
+  mutate(lgd=ifelse(pv.balance==0 | exp_loss==0, 0, lgd))%>%
+  mutate(pred.ev=rbinom(1,1,value))%>%
+  mutate(ecl=value*pv.balance*lgd)
+  
+  zz1<-
+    zz%>%
+    ungroup()%>%
+    filter(name=="risk_1yr")%>%
+    select(name,pv.balance, value, collateral)
+  
+  
+  sim.t<-data.frame(matrix(ncol=1000,nrow=nrow(zz1)))
+  colnames(sim.t)<-paste0("sim",seq(1:1000))
+  sim.col.prob<-(1-rtriangle(1000, a=c.value.min, b=c.value.max,c=c.value.mp))
+  for(i in 1:1000){
+    sim.t[,i]<-round(zz1$value*(zz1$pv.balance-zz1$collateral*sim.col.prob[i]),2)
+  }
+sim.t[sim.t<0]<-0
+sims.a<-colSums(sim.t)
+sim.d<-cbind(zz1,sim.t)
+hist.pro <- density(colSums(sim.t))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+
+ggplot(pro_dens,
+             aes(
+               x = hist.pro.x,
+               y = hist.pro.y,
+               ymin = 0,
+               ymax = max(hist.pro.y)
+             )) + geom_area(aes(y = hist.pro.y))
+
+
+  
+
+```
+
+
+
