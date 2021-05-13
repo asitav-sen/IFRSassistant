@@ -1,0 +1,359 @@
+---
+title: "easyIFRSrisk"
+output: pdf_document
+params:
+  user: "Person 1"
+  newdata: NA
+  predtabledata: NA
+  disrate: NA
+  simdata: NA
+  finaldata: NA
+  gdpf: NA
+  pf: NA
+author: "`r params$user`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Portfolio details
+
+The following section provide some basic portfolio details.
+
+
+```{r portfolio, echo=FALSE, message=FALSE, warning=FALSE}
+df <- params$newdata
+df <- df %>%
+  ungroup() %>%
+  arrange(id, report_date) %>%
+  group_by(id) %>%
+  slice_max(report_date, n = 1) %>%
+  mutate(yr = lubridate::year(origination_date))
+p1 <-
+  df %>%
+  group_by(yr, loan_status) %>%
+  summarise(no_of_loans = n()) %>%
+  ungroup() %>%
+  ggplot(aes(
+    x = yr,
+    y = no_of_loans,
+    label = no_of_loans,
+    fill = factor(
+      loan_status,
+      levels = c("0", "1"),
+      labels = c("Good", "Bad")
+    )
+  )) +
+  geom_col(position = "dodge") +
+  geom_text(aes(y = no_of_loans + 20), position = position_dodge(width = 1)) +
+  labs(title = "No. of assets by year",
+       x = "Year",
+       y = "#") +
+  theme_bw() +
+  theme(legend.position = "none")
+p2 <-
+  df %>%
+  group_by(asset_type, loan_status) %>%
+  summarise(no_of_loans = n()) %>%
+  ungroup() %>%
+  ggplot(aes(
+    x = asset_type,
+    y = no_of_loans,
+    label = no_of_loans,
+    fill = factor(
+      loan_status,
+      levels = c("0", "1"),
+      labels = c("Good", "Bad")
+    )
+  )) +
+  geom_col(position = "dodge") +
+  geom_text(aes(y = no_of_loans + 20), position = position_dodge(width = 1)) +
+  labs(title = "No. of assets by asset type",
+       x = "Asset Type",
+       y = "#") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+p3 <-
+  df %>%
+  group_by(customer_type, loan_status) %>%
+  summarise(no_of_loans = n()) %>%
+  ungroup() %>%
+  ggplot(aes(
+    x = customer_type,
+    y = no_of_loans,
+    label = no_of_loans,
+    fill = factor(
+      loan_status,
+      levels = c("0", "1"),
+      labels = c("Good", "Bad")
+    )
+  )) +
+  geom_col(position = "dodge") +
+  geom_text(aes(y = no_of_loans + 20), position = position_dodge(width = 1)) +
+  labs(title = "No. of assets by customer type",
+       x = "Customer Type",
+       y = "#") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank())
+p4 <- p1 / (p2 | p3)
+
+p4
+
+```
+
+```{r otext, message=FALSE, warning=FALSE}
+paste0(
+  "Total assets (no.): ",
+  length(unique(df$id)) ,
+  "\n",
+  "Total balance outstanding: ",
+  round(sum(df$balance) / 1000000, 2),
+  " M"
+  
+)
+```
+
+
+## Probability of Default by time
+
+The following plot provides information about probability of default by time, up to five years from now. For each year, the distribution of probability of default is show.
+This is derived from survival modeling of the provided data and adding some macroeconomic data of the country chosen.
+
+```{r pod, message=FALSE, warning=FALSE}
+z<-params$predtabledata
+z%>%
+  group_by(name)%>%
+  #summarise(pd.me=median(value), pd.min=quantile(value,0.05), pd.max=quantile(value, 0.95))%>%
+  slice_head(n=6)%>%
+  mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr")))%>%
+  filter(!is.na(name))%>%
+  ggplot(aes(x=name, y=value, fill=name))+
+  geom_violin()+
+  geom_boxplot(width=0.1, color="black", alpha=0.2)+
+  labs(x="",
+       y="Probability",
+       title = "Probability of default")+
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position = "bottom")
+```
+
+
+### Forecast of macroeconomic parameters
+
+GDP and prices were used as macroeconomic parameters to arrive at the probabilities above. They for forecasted first and then the forecasted values we used (if used). The resolt of forcast are shown below.
+
+```{r gdp, message=FALSE, warning=FALSE}
+autoplot(params$gdpf)
+```
+
+
+```{r prices, message=FALSE, warning=FALSE}
+autoplot(params$pf)
+```
+
+
+## Exposure on Default
+
+The following plot shows the amount at risk of default by year. 
+
+```{r eod, message=FALSE, warning=FALSE}
+discount_rate_pa<-params$disrate
+z%>%
+  mutate(pv.balance=balance/(1+discount_rate_pa)^(r_n-1))%>%
+  mutate(exposure_on_default=pv.balance*value)%>%
+  group_by(name)%>%
+  summarise(pv.balance=sum(pv.balance), exposure_on_default=sum(exposure_on_default))%>%
+  mutate(name=factor(name, levels = c("risk_current", "risk_1yr", "risk_2yr", "risk_3yr", "risk_4yr", 
+                               "risk_5yr")))%>%
+  pivot_longer(cols=c("pv.balance","exposure_on_default"), names_to="type", values_to="amount")%>%
+  ggplot(aes(x=name, y=amount/1000000, fill=type, label=paste0(round(amount/1000000)," M")))+
+  geom_col(position = "dodge")+
+  geom_text(aes(y=(amount/1000000)+5), position = position_dodge(width = 1))+
+  labs(x="",
+       y="Amount",
+       title = "Exposure on default",
+       subtitle = "Amounts discounted")+
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position = "bottom")
+```
+
+
+## Estimated credit loss
+
+Scenarios were built using Monte-Carlo simulation by varying the depreciation of collateral value. The plots below show the density of possible losses.
+The first one is overall weighted estimated credit loss. The others are individual distributions
+
+### Overall Estimated Credit Loss
+
+```{r oecl, message=FALSE, warning=FALSE}
+ddf<-params$finaldata
+            ddf%>%
+              mutate(amount=x*y) %>% 
+            group_by(r) %>% 
+            summarise(amount=sum(amount)) %>% 
+            ggplot(aes(x=r,y=round(amount/1000), label=paste0(round(amount/1000)," K"))) +
+            geom_col() +
+            geom_text(aes(y=round(amount/1000)+1)) +
+            labs(title = "Estimated Credit Loss",
+                 subtitle = "Weighted sum of 1000 simulations",
+                 x="",
+                 y="Amount") +
+            theme_bw()
+```
+
+
+### Risk Current (Present to 1 year)
+
+```{r riskcurrent, warning=FALSE, paged.print=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_current") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+        
+```
+
+
+### Risk 1yr (1 year to 2 years)
+
+```{r risk1, message=FALSE, warning=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_1yr") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+
+```
+
+
+### Risk 2yrs (2 years to 3 years)
+
+```{r risk2, message=FALSE, warning=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_2yr") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+
+```
+
+
+### Risk 3yrs (3 years to 4 years)
+
+```{r risk3, message=FALSE, warning=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_3yr") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+
+```
+
+
+### Risk 4yrs (4 years to 5 years)
+
+```{r risk4, message=FALSE, warning=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_4yr") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+
+```
+
+
+### Risk 5yrs (5 years to 6 years)
+
+```{r risk5, message=FALSE, warning=FALSE}
+
+dt <- params$simdata %>%
+  filter(name == "risk_4yr") %>%
+  ungroup() %>%
+  select(matches("sim?"))
+hist.pro <- density(colSums(dt))
+pro_dens <- data.frame(hist.pro$x, hist.pro$y)
+ggplot(pro_dens,
+       aes(x = hist.pro.x,
+           y = hist.pro.y)) + geom_area(aes(y = hist.pro.y)) +
+  labs(
+    x = "Amount",
+    y = "Chance",
+    title = "Simulated expected credit loss",
+    subtitle = "Amounts discounted"
+  ) +
+  theme_bw()
+
+```
+
+
+
+
+
+
+## Footnotes
+
+[^1]: Provided the parameters were found to contribute significantly towards the chances of default.
