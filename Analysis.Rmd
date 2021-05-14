@@ -360,8 +360,9 @@ df%>%
   mutate(amount=x*y) %>% 
   group_by(r) %>% 
   summarise(amount=sum(amount))
-
-
+names(ndt$"id")
+x$"ID"<-as.character(x$"ID")
+x
 ```
 
 

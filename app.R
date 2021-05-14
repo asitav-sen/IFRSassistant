@@ -2,8 +2,6 @@
 # Application developed by Asitav Sen
 
 library(shiny)
-library(promises)
-library(future)
 library(dplyr)
 library(ggplot2)
 library(lubridate)
@@ -180,11 +178,9 @@ basicstatServer <- function(id, dt) {
 
 # Adding initial data
 
-ndt <- read.csv("./data/transactions.csv")
-collateral <- read.csv("./data/collateral.csv")
+
 countries <- read.csv("./data/countries.csv")
 
-plan(multisession)
 
 # Define UI for application that draws a histogram
 ui <- navbarPage(
@@ -295,12 +291,17 @@ ui <- navbarPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     # Data
+    collateral.dt<-reactiveVal()
+    transaction.dt<-reactiveVal()
     
+    collateral.dt(read.csv("./data/collateral.csv") )
+ 
     
+    transaction.dt(read.csv("./data/transactions.csv") )
+
     
     new.data <- reactive({
-        
-        if(!input$uploadnew){
+        ndt<- transaction.dt()
             withProgress(message = "Trying to read",
                          detail = "Hope the handwriting is legible!",
                          value = 0,
@@ -342,21 +343,13 @@ server <- function(input, output) {
                                  dplyr::select(-bureau_score_orig)
                              setProgress(value = 2, message = "Patience test 1 of 2")
                          })
-            return(ndt)
-        } else {
-            return(trans.dt())
-        }
+            ndt
         
         
     })
     
     
-    collateral.dt<- reactive({
-        if(!input$uploadnew){
-            return(collateral)
-        } else { return(colla.dt()) }
-    })
-    
+
     # Show uploaded data
     output$up_data <- renderDataTable({
         datatable(new.data(),
@@ -1282,7 +1275,8 @@ server <- function(input, output) {
                                 tags$li("Bureau/internal credit score"),
                                 tags$li("Current loan status (1 is bad and 0 is good)"),
                                 tags$li("Asset classification"),
-                                tags$li("Customer classification")
+                                tags$li("Customer classification"),
+                                tags$li("Loan Status")
                             ),
                             "The collateral file should contain present value of the collateral/possible price of sales of the asset/sales of hypothecated asset etc."
                         )
@@ -1316,7 +1310,7 @@ server <- function(input, output) {
                                    header = input$header,
                                    sep = input$sep,
                                    quote = input$quote)
-            return(df)
+            df
         })
         
         df.c <- reactive({
@@ -1327,17 +1321,17 @@ server <- function(input, output) {
                            header = input$header,
                            sep = input$sep,
                            quote = input$quote)
-            return(df)
+            df
         })
-        updateVarSelectInput("collateralid","Select id column", df.c(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("collateralvalue","Select Collateral value column", df.c(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("reportdate","Select report date column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("origindate","Select origin date column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("maturitydate","Select maturity date column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("assettype","Select asset classifier column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("customertype","Select customer classifier column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("otherfact","Select any other classifier column", df.tr(),session = getDefaultReactiveDomain(),)
-        updateVarSelectInput("bureauscore","Select bureau score column", df.tr(),session = getDefaultReactiveDomain(),)
+        updateVarSelectInput("collateralid","Select id column", df.c(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("collateralvalue","Select Collateral value column", df.c(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("reportdate","Select report date column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("origindate","Select origin date column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("maturitydate","Select maturity date column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("assettype","Select asset classifier column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("customertype","Select customer classifier column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("otherfact","Select any other classifier column", df.tr(),session = getDefaultReactiveDomain())
+        updateVarSelectInput("bureauscore","Select bureau score column", df.tr(),session = getDefaultReactiveDomain())
         updateVarSelectInput("balance","Select asset balance column", df.tr(),session = getDefaultReactiveDomain())
         updateVarSelectInput("status","Select loan status", df.tr(),session = getDefaultReactiveDomain())
         updateVarSelectInput("defaultflag","Select default flag column", df.tr(),session = getDefaultReactiveDomain())
@@ -1351,22 +1345,30 @@ server <- function(input, output) {
         showModal(modalDialog(
             title = "File formatting",
             fluidRow(
-                p("Collateral File"),
-                varSelectInput("collateralid","Select id column", NULL),
-                varSelectInput("collateralvalue","Select Collateral value column", NULL),
-                p("Transactions file"),
-                varSelectInput("transid","Select id column", NULL),
-                varSelectInput("reportdate","Select report date column", NULL),
-                varSelectInput("origindate","Select origin date column", NULL),
-                varSelectInput("maturitydate","Select maturity date column", NULL),
-                varSelectInput("assettype","Select asset classifier column", NULL),
-                varSelectInput("customertype","Select customer classifier column", NULL),
-                varSelectInput("otherfact","Select any other classifier column", NULL, multiple = T),
-                varSelectInput("bureauscore","Select bureau score column", NULL),
-                varSelectInput("balance","Select asset balance column", NULL),
-                varSelectInput("status","Select loan status column", NULL),
-                varSelectInput("defaultflag","Select default flag column", NULL),
-                radioButtons("dateformat","Select date format",choices = c("dmy","ymd"), selected = "ymd", inline = T)
+                
+                column(
+                    width = 6,
+                    p("Transactions file"),
+                    varSelectInput("transid","Select id column", NULL),
+                    varSelectInput("reportdate","Select report date column", NULL),
+                    varSelectInput("origindate","Select origin date column", NULL),
+                    varSelectInput("maturitydate","Select maturity date column", NULL),
+                    varSelectInput("assettype","Select asset classifier column", NULL),
+                    varSelectInput("customertype","Select customer classifier column", NULL),
+                    varSelectInput("otherfact","Select any other classifier column", NULL, multiple = T)
+                ),
+                column(
+                    width = 6,
+                    p("Transactions file"),
+                    varSelectInput("bureauscore","Select bureau score column", NULL),
+                    varSelectInput("balance","Select asset balance column", NULL),
+                    varSelectInput("status","Select loan status column", NULL),
+                    varSelectInput("defaultflag","Select default flag column", NULL),
+                    radioButtons("dateformat","Select date format",choices = c("dmy","ymd"), selected = "ymd", inline = T),
+                    p("Collateral File"),
+                    varSelectInput("collateralid","Select id column", NULL),
+                    varSelectInput("collateralvalue","Select Collateral value column", NULL)
+                )
             ),
             easyClose = F,
             size = "l",
@@ -1377,63 +1379,71 @@ server <- function(input, output) {
         ))
     })
     
-    observeEvent(input$confirmupload,{
-        
-        trans.dt<-reactive({
-            validate(
-                need(!is.null(df.tr()), message="Transaction file not uploaded"),
-                need(length(unique(df.tr()[,input$status]))==2, message="Asset status column should have just 1, 0 as values")
-            )
-            df<-df.tr()
-            name(df[,input$reportdate])<-"report_date"
-            name(df[,input$origindate])<-"origination_date"
-            name(df[,input$maturitydate])<-"maturity_date"
-            name(df[,input$assettype])<-"asset_type"
-            name(df[,input$customertype])<-"customer_type"
-            name(df[,input$bureauscore])<-"bureau_score_orig"
-            name(df[,input$balance])<-"balance"
-            name(df[,input$status])<-"loan_status"
-            name(df[,input$defaultflag])<-"default_flag"
-            name(df[,input$transid])<-"id"
-            
-            if(input$dateformat=="ymd"){
-                df$report_date<-ymd(df$report_date)
-                df$origination_date<-ymd(df$origination_date)
-                df$maturity_date<-ymd(df$maturity_date)
-            } else {
-                df$report_date<-dmy(df$report_date)
-                df$origination_date<-dmy(df$origination_date)
-                df$maturity_date<-dmy(df$maturity_date)
-            }
-            
-            df$loan_status<-as.integer(df$loan_status)
-            
-            # Covert to factors
-            df$asset_type<-as.factor(df$asset_type)
-            df$customer_type<-as.factor(df$customer_type)
-            if(!is.null(input$otherfact)){
-                for(i in 1:length(input$otherfact)){
-                    df[,input$otherfact[i]]<-as.factor(df[,input$otherfact[i]])
-                } 
-            }
-            
-            df
-            
-        })
-        colla.dt<-reactive({
-            validate(
-                need(!is.null(df.c()), message="Transaction file not uploaded")
-            )
-            df<-df.c()
-            name(df[,input$collateralid])<-"id"
-            name(df[,input$collateralvalue])<-"collateral"
+    
 
-            
-            df
-            
-        })
+    observeEvent(input$confirmupload,{
+        transaction.dt(
+            {
+                df <- read.csv(input$transaction$datapath,
+                               header = input$header,
+                               sep = input$sep,
+                               quote = input$quote)
+                head(df)
+                
+                df<-
+                    df %>% 
+                    rename(report_date=input$reportdate,
+                           origination_date=input$origindate,
+                           maturity_date=input$maturitydate,
+                           asset_type=input$assettype,
+                           customer_type=input$customertype,
+                           bureau_score_orig=input$bureauscore,
+                           balance=input$balance,
+                           loan_status=input$status,
+                           default_flag=input$defaultflag,
+                           id=input$transid)
+                
+                if(input$dateformat=="ymd"){
+                    df$report_date<-ymd(df$report_date)
+                    df$origination_date<-ymd(df$origination_date)
+                    df$maturity_date<-ymd(df$maturity_date)
+                } else {
+                    df$report_date<-dmy(df$report_date)
+                    df$origination_date<-dmy(df$origination_date)
+                    df$maturity_date<-dmy(df$maturity_date)
+                }
+                
+                df$loan_status<-as.integer(df$loan_status)
+                
+                # Covert to factors
+                df$asset_type<-as.factor(df$asset_type)
+                df$customer_type<-as.factor(df$customer_type)
+                if(!is.null(input$otherfact)){
+                    for(i in 1:length(input$otherfact)){
+                        df$input$otherfact[i]<-as.factor(df$input$otherfact[i])
+                    } 
+                }
+                
+                df
+            }
+        )
         
+        collateral.dt(
+            {
+                df <- read.csv(input$collaterals$datapath,
+                               header = input$header,
+                               sep = input$sep,
+                               quote = input$quote)
+                df<-
+                    df %>% 
+                    rename(id=input$collateralid,
+                           collateral=input$collateralvalue)
+                df
+        }
+        )
+        removeModal()
     })
+    
     
 }
 
