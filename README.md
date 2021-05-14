@@ -1,14 +1,3 @@
----
-title: "IFRSassistant"
-author: "Asitav"
-date: "15/05/2021"
-output: 
-  html_document: 
-    keep_md: yes
----
-
-
-
 ## Intro
 
 IFRSassistant, as the name suggests, aims to provide convenience in part of the IFRS reporting process, to the finance and accounting consultants and SMEs in the finance industry. Specifically, it helps with the estimation of loss on assets over specific periods in time. It involves certain complexities, which are as follows.
@@ -25,6 +14,7 @@ The shiny app does this.
 The application is loaded with sample data. However, you can upload your data. The application takes two data sets. One for transactions and other for data about the collaterals.
 
 ![Upload Modal](https://user-images.githubusercontent.com/66162817/118330640-6b16b600-b525-11eb-90b4-d723bd35da56.png)
+
 There are certain information compulsory in the transaction data.
 
 - An `id` column that is the unique identifier of the asset
