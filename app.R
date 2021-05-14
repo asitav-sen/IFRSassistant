@@ -187,7 +187,7 @@ ui <- navbarPage(
     theme = shinytheme("cosmo"),
     title = "IFRSassistant",
     tabPanel(
-        "App",
+        "Home",
         fluidRow(column(
             width = 11,
             fluidRow(
@@ -195,17 +195,26 @@ ui <- navbarPage(
                     width = 8,
                     tags$div(
                         tags$blockquote(
-                            "IFRSassistant, will assist you with the provisioning report as per guidelines provided in IFRS 9."
+                            "IFRSassistant is being built to provide convenience to Finance and Accounting consultants and SMEs in finance industry."
                         ),
                         p(
-                            "Whether you are a SME or a finance consultant, it will help you save immense amount of time. This single app will calculate the provisioning requirements in a few clicks and you can download the report with a single click!"
+                            "IFRS provisioning is a fairly complicated process involving Monte Carlo simulation, forecasting, survival modelling (or other predictive algorithm) and financial mathematics. 
+                            Naturally, it is time consuming and has its share of hassles. This app attempts to avoid all the hassles of setting up environment and tools to perform the multistep analysis. 
+                            This app will calculate the provisioning requirements in a few clicks and one can download the report with a single click!"
                         ),
-                        "If you are a R coder, you are welcome to contribute. Please visit the ",
-                        tags$a(href = "www.rstudio.com", "github page."),
+                        p("The basic steps are mentioned in the diagram on the left hand side. The app is not in its most evolved form yet. 
+                          There is a huge list of features and functions that I personally want to include and implement in future."),
+                        h6("How to use?"),
+                        p("Using the tool is very simple. You can upload two data sets. One that shows a certain number of transactions of each asset, along with some dates, parameters and event outcome.
+                        And the other that contains value of collateral or estimated value of sales of the asset/hypothecated asset. Then proceed further with the clicks and in between select some parameters. 
+                          For e.g. the discount rate to be applied, the most probable, maximum possible and minimum possible depreciation of value of the collateral. 
+                          Once the simulation is done, you can download the report in pdf format."),
+                        "If you are a R coder, you are welcome to contribute and help improve. Please visit the ",
+                        tags$a(href = "https://github.com/asitav-sen/IFRSassistant", "github page"),
                         " or ",
                         tags$a(href = "www.asitavsen.com", "contact me."),
                         "Please use this ",
-                        tags$a(href = "https://github.com/asitav-sen/IFRSassistant/issues/new/choose", "link"),
+                        tags$a(href = "https://github.com/asitav-sen/IFRSassistant/issues", "link"),
                         " to report issues and/or request new features/functions.", "For general discussions, please use this",tags$a(href = "https://github.com/asitav-sen/IFRSassistant/discussions", "link"),
                         tags$br()
                     )
@@ -233,9 +242,10 @@ ui <- navbarPage(
                     p("This section shows the data (uploaded or inbuilt sample).")
                 ),
                 br(),
-                dataTableOutput("up_data"),
+                withSpinner(dataTableOutput("up_data"),type = 7,
+                            color = "black"),
                 br(),
-                actionButton("uploadnew", "Upload New Data")
+                actionButton("uploadnew", "Upload New Data", class="btn-light")
             ),
             column(width = 6,
                    br(),
@@ -284,7 +294,11 @@ ui <- navbarPage(
                         uiOutput("credit_loss"))),
         fluidRow(column(width = 11,
                         uiOutput("dlmanager")))
-    )
+    ),
+    tabPanel(title = p("GitHub", href="https://github.com/asitav-sen/IFRSassistant")),
+    tabPanel(title = p("IFRS", href="https://cdn.ifrs.org/")),
+    tabPanel(title = p("RStudio Cloud", href="https://github.com/asitav-sen/IFRSassistant")),
+    tabPanel(title = p("Author", href="www.asitavsen.com"))
     
 )
 
@@ -538,7 +552,7 @@ server <- function(input, output) {
                              ) == 1)))
                          
                          df$asset_type <- as.factor(df$asset_type)
-                         df$supplier <- as.factor(df$supplier)
+                         #df$supplier <- as.factor(df$supplier)
                          df$customer_type <-
                              as.factor(df$customer_type)
                          
