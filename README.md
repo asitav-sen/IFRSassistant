@@ -6,7 +6,7 @@ IFRSassistant, as the name suggests, aims to provide convenience in part of the 
 - Inclusion of external factors like macroeconomic
 - Simulation of scenarios and calculation of weighted sum
 
-The shiny app does this.
+The shiny app does this and provides estimated credit loss by year for up to 6 years (current, 1, 2,3,4 and 5 years).
 
 
 ## How does it work
@@ -71,7 +71,8 @@ Finally, after entering the name, a report can be generated and downloaded.
 ![rep](https://user-images.githubusercontent.com/66162817/118330566-66ea9880-b525-11eb-943d-5f89b09cd3ed.png)
 
 
-![pdf](https://user-images.githubusercontent.com/66162817/118330549-66520200-b525-11eb-845f-3ad7a5793d87.png)
+![pdf](https://user-images.githubusercontent.com/66162817/118333004-90f18a00-b528-11eb-92a1-281f3ad780d3.png)
+
 
 
 
