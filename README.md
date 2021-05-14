@@ -24,7 +24,7 @@ The shiny app does this.
 
 The application is loaded with sample data. However, you can upload your data. The application takes two data sets. One for transactions and other for data about the collaterals.
 
-![Upload Modal](/Users/apple/Desktop/umod.png)
+![Upload Modal](https://user-images.githubusercontent.com/66162817/118330640-6b16b600-b525-11eb-90b4-d723bd35da56.png)
 There are certain information compulsory in the transaction data.
 
 - An `id` column that is the unique identifier of the asset
@@ -39,48 +39,57 @@ And in the collateral data id and value of the collateral are required.
 
 The data can (and should) contain multiple transactions and reports (on different report dates) per asset. However, latest transaction/report of all the assets should be on the same date i.e. if there are 100 assets, each of their last report date should be same.
 
-![Formatting](/Users/apple/Desktop/formatting.png)
+![formatting](https://user-images.githubusercontent.com/66162817/118330632-6a7e1f80-b525-11eb-9df9-844dabdd089b.png)
 
 Then the columns need to be identified and confirmed.
 
 Once done, the data is displayed. And some basic information about the portfolio is also plotted.
 
-![Data](/Users/apple/Desktop/ndata.png)
+![data](https://user-images.githubusercontent.com/66162817/118330622-69e58900-b525-11eb-9b05-ece0ffbb8ee4.png)
 
 
-![Basic info](/Users/apple/Desktop/basic.png)
+![basic](https://user-images.githubusercontent.com/66162817/118330612-69e58900-b525-11eb-8f9a-5d1c2c1fd080.png)
 
 IFRS 9 requires that the external parameters are considered during calculation. Here, we use `GDP` and `price` as the external parameters. This information is downloaded from IMF after the `fetch` button is clicked. The data is joined with the uploaded transaction data and displayed.
 
-![Macroeconomic](/Users/apple/Desktop/macro.png)
+![macro](https://user-images.githubusercontent.com/66162817/118330604-694cf280-b525-11eb-8993-06535159f4c3.png)
 
 Once this data is downloaded, the future parameters are forecasted. The results are not displayed in the app. However, they are available in the pdf report (screenshot below).
 
-![Forecast](/Users/apple/Desktop/forecast.png)
+![forecast](https://user-images.githubusercontent.com/66162817/118330531-6520d500-b525-11eb-88ce-bba5f0172eea.png)
 
 After this, the model selection and fitting can be initiated using the relevant button. This takes some time. Then the outcome (distribution of the probabilities of default) is shown by year.
 
-![Formatting](/Users/apple/Desktop/pod.png)
+![pod](https://user-images.githubusercontent.com/66162817/118330593-68b45c00-b525-11eb-897b-5d3ff8faa22d.png)
+
 Next, some parameters are required for the user for present value calculations and Monte Carlo simulations. The present value of the exposure by year is calculated and displayed.
 
-![sim setting and eod](/Users/apple/Desktop/eod.png)
+![eod](https://user-images.githubusercontent.com/66162817/118330582-681bc580-b525-11eb-8e10-3db6ce1d93cc.png)
 
 
 The simulated loss calculation by year is plotted (can be selected for display). THe graphs can be clicked and dragged to display probability occurrence of loss within the selected range.
 
-![Simulation result](/Users/apple/Desktop/sim.png)
+![sim](https://user-images.githubusercontent.com/66162817/118330481-6225e480-b525-11eb-817b-a9d6ca143caa.png)
 
 A overall weighted sum of expected credit loss by year is also plotted.
 
-![ecl](/Users/apple/Desktop/ecl.png)
+![ecl](https://user-images.githubusercontent.com/66162817/118330573-67832f00-b525-11eb-8638-00aaaa166cc8.png)
 
 Finally, after entering the name, a report can be generated and downloaded.
 
 
-![report generation](/Users/apple/Desktop/rep.png)
+![rep](https://user-images.githubusercontent.com/66162817/118330566-66ea9880-b525-11eb-943d-5f89b09cd3ed.png)
+
+
+![pdf](https://user-images.githubusercontent.com/66162817/118330549-66520200-b525-11eb-845f-3ad7a5793d87.png)
 
 
 
 
-![pdf](/Users/apple/Desktop/pdf.png)
+
+
+
+
+
+
 
