@@ -198,7 +198,7 @@ ui <- navbarPage(
                             "IFRSassistant is being built to provide convenience to Finance and Accounting consultants and SMEs in finance industry."
                         ),
                         p(
-                            "IFRS provisioning is a fairly complicated process involving Monte Carlo simulation, forecasting, survival modelling (or other predictive algorithm) and financial mathematics. 
+                            "IFRS reporting, especially estimated loss calculation is a fairly complicated process involving Monte Carlo simulation, forecasting, survival modelling (or other predictive algorithm) and financial mathematics. 
                             Naturally, it is time consuming and has its share of hassles. This app attempts to avoid all the hassles of setting up environment and tools to perform the multistep analysis. 
                             This app will calculate the provisioning requirements in a few clicks and one can download the report with a single click!"
                         ),
@@ -259,7 +259,7 @@ ui <- navbarPage(
                 width = 6,
                 h3("With Macroeconomy data"),
                 p(
-                    "In this section, we add macroeconomic data. Please select the country of the asset and click on fetch button."
+                    "In this section, we add macroeconomic data. Please select the country of the asset and click on fetch button. If download fails, click again or try after sometime."
                 ),
                 column(
                     width = 6,
@@ -294,11 +294,7 @@ ui <- navbarPage(
                         uiOutput("credit_loss"))),
         fluidRow(column(width = 11,
                         uiOutput("dlmanager")))
-    ),
-    tabPanel(title = p("GitHub", href="https://github.com/asitav-sen/IFRSassistant")),
-    tabPanel(title = p("IFRS", href="https://cdn.ifrs.org/")),
-    tabPanel(title = p("RStudio Cloud", href="https://github.com/asitav-sen/IFRSassistant")),
-    tabPanel(title = p("Author", href="www.asitavsen.com"))
+    )
     
 )
 
@@ -1290,7 +1286,7 @@ server <- function(input, output) {
                                 tags$li("Current loan status (1 is bad and 0 is good)"),
                                 tags$li("Asset classification"),
                                 tags$li("Customer classification"),
-                                tags$li("Loan Status")
+                                tags$li("Asset balance")
                             ),
                             "The collateral file should contain present value of the collateral/possible price of sales of the asset/sales of hypothecated asset etc."
                         )
