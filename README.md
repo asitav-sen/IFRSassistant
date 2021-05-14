@@ -75,11 +75,27 @@ Finally, after entering the name, a report can be generated and downloaded.
 
 
 
+## Future work
+
+Future plans of adding features anf functionalities will be noted in the [issues section](https://github.com/asitav-sen/IFRSassistant/issues) because the list is too big :)
 
 
+## Packages used
 
-
-
+1. [shiny](https://shiny.rstudio.com)
+2. [dplyr](https://dplyr.tidyverse.org)
+3. [ggplot2](https://ggplot2.tidyverse.org)
+4. [lubridate](https://lubridate.tidyverse.org)
+5. [survival](https://cran.r-project.org/web/packages/survival/index.html)
+6. [pec](https://cran.r-project.org/web/packages/pec/index.html)
+7. [DT](https://rstudio.github.io/DT/)
+8. [shinycsssloader](https://github.com/daattali/shinycssloaders)
+9. [imfr](https://cran.r-project.org/web/packages/imfr/index.html)
+10. [patchwork](https://cran.r-project.org/web/packages/patchwork/index.html)
+11. [tidyr](https://tidyr.tidyverse.org)
+12. [shinythemes](https://rstudio.github.io/shinythemes/)
+13. [triangle](https://cran.r-project.org/web/packages/triangle/index.html)
+14. [Diagrammer](https://rich-iannone.github.io/DiagrammeR/graphviz_and_mermaid.html)
 
 
 
