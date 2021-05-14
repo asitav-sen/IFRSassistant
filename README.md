@@ -96,6 +96,7 @@ Future plans of adding features anf functionalities will be noted in the [issues
 12. [shinythemes](https://rstudio.github.io/shinythemes/)
 13. [triangle](https://cran.r-project.org/web/packages/triangle/index.html)
 14. [Diagrammer](https://rich-iannone.github.io/DiagrammeR/graphviz_and_mermaid.html)
+15. [Forecast](https://cran.r-project.org/web/packages/forecast/index.html)
 
 
 
