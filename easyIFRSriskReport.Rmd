@@ -1,5 +1,5 @@
 ---
-title: "easyIFRSrisk"
+title: "IFRSassistant - Estimated Credit Loss Report"
 output: pdf_document
 params:
   user: "Person 1"
@@ -144,7 +144,7 @@ z%>%
 
 ### Forecast of macroeconomic parameters
 
-GDP and prices were used as macroeconomic parameters to arrive at the probabilities above. They for forecasted first and then the forecasted values we used (if used). The resolt of forcast are shown below.
+GDP and prices were used as macroeconomic parameters to arrive at the probabilities above. They for forecasted first and then the forecasted values we used (if used). The result of forecast are shown below.
 
 ```{r gdp, message=FALSE, warning=FALSE}
 autoplot(params$gdpf)
@@ -354,6 +354,4 @@ ggplot(pro_dens,
 
 
 
-## Footnotes
 
-[^1]: Provided the parameters were found to contribute significantly towards the chances of default.
