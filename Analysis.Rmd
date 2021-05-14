@@ -18,7 +18,7 @@ library(pec)
 
 
 ```{r}
-ndt<-read.csv("transactions.csv")
+ndt<-read.csv("./data/transactions.csv")
 ```
 
 
@@ -94,7 +94,7 @@ df$customer_type<-as.factor(df$customer_type)
 
 
 
-df
+
 ```
 
 
@@ -258,7 +258,7 @@ z%>%
 
 ```{r}
 
-collateral<- read.csv("collateral.csv")
+collateral<- read.csv("./data/collateral.csv")
 
 # Exposure at Default
 discount_rate_pa<-0.02
