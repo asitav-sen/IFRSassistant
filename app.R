@@ -216,7 +216,8 @@ ui <- navbarPage(
                         "Please use this ",
                         tags$a(href = "https://github.com/asitav-sen/IFRSassistant/issues", "link"),
                         " to report issues and/or request new features/functions.", "For general discussions, please use this",tags$a(href = "https://github.com/asitav-sen/IFRSassistant/discussions", "link"),
-                        tags$br()
+                        tags$br(),
+                        tags$image(height=100, width=100,src="logo3.png")
                     )
                 ),
                 column(
