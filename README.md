@@ -1,3 +1,6 @@
+
+![logo3small](https://user-images.githubusercontent.com/66162817/118362717-49154600-b5ae-11eb-99b3-0e7a0bced8fe.png)
+
 ## Intro
 
 IFRSassistant, as the name suggests, aims to provide convenience in part of the IFRS reporting process, to the finance and accounting consultants and SMEs in the finance industry. Specifically, it helps with the estimation of loss on assets over specific periods in time. It involves certain complexities, which are as follows.
@@ -6,7 +9,7 @@ IFRSassistant, as the name suggests, aims to provide convenience in part of the 
 - Inclusion of external factors like macroeconomic
 - Simulation of scenarios and calculation of weighted sum
 
-The shiny app does this.
+The shiny app does this and provides estimated credit loss by year for up to 6 years (current, 1, 2,3,4 and 5 years).
 
 
 ## How does it work
@@ -71,14 +74,32 @@ Finally, after entering the name, a report can be generated and downloaded.
 ![rep](https://user-images.githubusercontent.com/66162817/118330566-66ea9880-b525-11eb-943d-5f89b09cd3ed.png)
 
 
-![pdf](https://user-images.githubusercontent.com/66162817/118330549-66520200-b525-11eb-845f-3ad7a5793d87.png)
+![pdf](https://user-images.githubusercontent.com/66162817/118333004-90f18a00-b528-11eb-92a1-281f3ad780d3.png)
 
 
 
+## Future work
+
+Future plans of adding features anf functionalities will be noted in the [issues section](https://github.com/asitav-sen/IFRSassistant/issues) because the list is too big :)
 
 
+## Packages used
 
-
+1. [shiny](https://shiny.rstudio.com)
+2. [dplyr](https://dplyr.tidyverse.org)
+3. [ggplot2](https://ggplot2.tidyverse.org)
+4. [lubridate](https://lubridate.tidyverse.org)
+5. [survival](https://cran.r-project.org/web/packages/survival/index.html)
+6. [pec](https://cran.r-project.org/web/packages/pec/index.html)
+7. [DT](https://rstudio.github.io/DT/)
+8. [shinycsssloader](https://github.com/daattali/shinycssloaders)
+9. [imfr](https://cran.r-project.org/web/packages/imfr/index.html)
+10. [patchwork](https://cran.r-project.org/web/packages/patchwork/index.html)
+11. [tidyr](https://tidyr.tidyverse.org)
+12. [shinythemes](https://rstudio.github.io/shinythemes/)
+13. [triangle](https://cran.r-project.org/web/packages/triangle/index.html)
+14. [Diagrammer](https://rich-iannone.github.io/DiagrammeR/graphviz_and_mermaid.html)
+15. [Forecast](https://cran.r-project.org/web/packages/forecast/index.html)
 
 
 
