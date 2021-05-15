@@ -1,3 +1,6 @@
+
+![logo3small](https://user-images.githubusercontent.com/66162817/118362717-49154600-b5ae-11eb-99b3-0e7a0bced8fe.png)
+
 ## Intro
 
 IFRSassistant, as the name suggests, aims to provide convenience in part of the IFRS reporting process, to the finance and accounting consultants and SMEs in the finance industry. Specifically, it helps with the estimation of loss on assets over specific periods in time. It involves certain complexities, which are as follows.
