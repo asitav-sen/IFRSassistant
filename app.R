@@ -151,18 +151,39 @@ server <- function(input, output) {
                      value = 0,
                      {
                          setProgress(value = 1, message = "Trying to reach..")
-                         imf.data <- imf_data(
-                             databaseID,
-                             c("NGDP_R_K_IX",
-                               "PCPI_IX"),
-                             country = "US",
-                             start = startdate,
-                             end = enddate,
-                             freq = "Q",
-                             return_raw = FALSE,
-                             print_url = FALSE,
-                             times = 3
+                         
+                         imf.data <- tryCatch(
+                             expr={
+                                 imf_data(
+                                     databaseID,
+                                     c("NGDP_R_K_IX",
+                                       "PCPI_IX"),
+                                     country = "US",
+                                     start = startdate,
+                                     end = enddate,
+                                     freq = "Q",
+                                     return_raw = FALSE,
+                                     print_url = FALSE,
+                                     times = 3
+                                 ) 
+                             },
+                             error = function(e){          # Specifying error message
+                                 showModal(
+                                     modalDialog(
+                                         "Error in IMF database. Sorry for the inconvenience. Can you please try again later?"
+                                     )
+                                 )
+                                 message("Error with IMF database. This is usually temporary. Sorry for the inconvenience. Please try again later.")
+                             },
+                             finally = {                   # Specifying final message
+                                 message("Error with IMF database. Please try again later.")
+                             }
                          )
+                             
+                             
+             
+                         
+                         
                          setProgress(value = 2, message = "Done")
                      })
         

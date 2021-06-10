@@ -61,9 +61,15 @@ imf.data<-imf_data(
   end = enddate,
   freq = "Q",
   return_raw = FALSE,
-  print_url = FALSE,
+  print_url = T,
   times = 3
 )
+
+tryCatch({
+  
+},
+ error = function(e)
+ print("You can't calculate the log of a character"))
 
 
 dataset_with_eco<-
@@ -363,6 +369,12 @@ df%>%
 names(ndt$"id")
 x$"ID"<-as.character(x$"ID")
 x
+imgurl <- png::readPNG("minionw.png")
+g<-grid::rasterGrob(imgurl, interpolate=TRUE)
+sticker(g, package="IFRSassistant", p_size=6,  s_width=2, s_height= 0.75, h_fill = "grey9", h_color = "white",
+         p_color = "white", url = "www.asitavsen.com", u_color = "white",
+         filename="logo3.png", spotlight = T, l_height = 1, l_x=0.275, l_y=0.75, s_x=1, s_y=1.3, p_x=1,p_y=0.6, l_alpha = 0.6)
+
 ```
 
 
