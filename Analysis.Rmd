@@ -54,9 +54,9 @@ checkquery = FALSE
 
 imf.data<-imf_data(
   databaseID,
-  c("NGDP_R_K_IX", 
+  c("AIP_IX", 
     "PCPI_IX"),
-  country = "US",
+  country = "IN",
   start = startdate,
   end = enddate,
   freq = "Q",
@@ -99,8 +99,9 @@ df$customer_type<-as.factor(df$customer_type)
 
 
 
-
-
+dt<-imf_codes("CL_INDICATOR_IFS")
+dt %>% 
+  DT::datatable()
 ```
 
 

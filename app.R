@@ -15,6 +15,7 @@ library(tidyr)
 library(shinythemes)
 library(triangle)
 library(DiagrammeR)
+library(stringr)
 
 
 options(shiny.reactlog = TRUE, appDir = getwd())
@@ -151,19 +152,19 @@ server <- function(input, output) {
                      value = 0,
                      {
                          setProgress(value = 1, message = "Trying to reach..")
-                         
+                         print(country)
                          imf.data <- tryCatch(
                              expr={
                                  imf_data(
                                      databaseID,
-                                     c("NGDP_R_K_IX",
+                                     c("AIP_IX",
                                        "PCPI_IX"),
-                                     country = "US",
+                                     country = stringr::str_trim(country),
                                      start = startdate,
                                      end = enddate,
                                      freq = "Q",
                                      return_raw = FALSE,
-                                     print_url = FALSE,
+                                     print_url = T,
                                      times = 3
                                  ) 
                              },
@@ -204,7 +205,7 @@ server <- function(input, output) {
                          dataset_with_eco <-
                              new.data() %>%
                              left_join(imf.data(), by = c("qtr" = "year_quarter")) %>%
-                             rename(gdp = NGDP_R_K_IX, prices = PCPI_IX) %>%
+                             rename(gdp = AIP_IX, prices = PCPI_IX) %>%
                              select(-iso2c) %>%
                              group_by(id) %>%
                              mutate(gdp_lag = lag(gdp, 1),
@@ -230,7 +231,7 @@ server <- function(input, output) {
             zoo::as.yearqtr(imf.data$year_quarter, format = "%Y-Q%q")
         ga <- imf.data[, c(2, 3)]
         minqg <- min(imf.data$year_quarter)
-        gats <- ts(ga$NGDP_R_K_IX,
+        gats <- ts(ga$AIP_IX,
                    start = minqg,
                    frequency = 4)
         

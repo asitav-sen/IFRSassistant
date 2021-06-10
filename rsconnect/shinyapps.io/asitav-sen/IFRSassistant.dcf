@@ -5,10 +5,10 @@ account: asitav-sen
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 4132504
-bundleId: 4617754
+bundleId: 4702518
 url: https://asitav-sen.shinyapps.io/IFRSassistant/
-when: 1621458838.51075
-lastSyncTime: 1621458838.51077
+when: 1623354320.05366
+lastSyncTime: 1623354320.05367
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .github/ISSUE_TEMPLATE/bug_report.md|.github/ISSUE_TEMPLATE/feature-function-proposal.md|.github/ISSUE_TEMPLATE/FutureWork.md|Analysis.Rmd|countries.csv|data/x.csv|LICENSE|logo1.png|logo2.png|logo3.png|logo3.xcf|minion.png|minionw.png|README.md|www/logo1.png|www/logo2.png
+ignoredFiles: .github/ISSUE_TEMPLATE/bug_report.md|.github/ISSUE_TEMPLATE/feature-function-proposal.md|.github/ISSUE_TEMPLATE/FutureWork.md|Analysis.Rmd|countries.csv|data/x.csv|LICENSE|logo1.png|logo2.png|logo3.png|logo3.xcf|minion.png|minionw.png|pitch.pptx|README.md|www/logo1.png|www/logo2.png

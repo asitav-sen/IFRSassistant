@@ -76,14 +76,14 @@ panel1<-
       width = 6,
       h3("With Macroeconomic data"),
       p(
-        "In this section, we add macroeconomic data. Please select the country of the asset and click on fetch button. If download fails, click again or try after sometime."
+        "In this section, we add macroeconomic data. Please select the country of the asset and click on fetch button. If download fails, click again or try after sometime. Please note that GDP data has been discontinued by IMF recently. Hence, using Industrial output temporarily."
       ),
       column(
         width = 6,
         selectInput(
           "country",
           "Country",
-          selected = "United States",
+          selected = "India",
           choices = countries$Country
         )
       ),
